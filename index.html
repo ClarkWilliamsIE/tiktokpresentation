@@ -130,7 +130,7 @@
       card.className = 'card';
       card.dataset.id = item.id;
       card.innerHTML = `
-        <video preload="metadata" playsinline muted loop tabindex="0" aria-label="Video ${index+1} of 20">
+        <video preload="metadata" playsinline webkit-playsinline muted autoplay loop controlslist="nodownload noplaybackrate" tabindex="0" aria-label="Video ${index+1} of 20">
           <source src="${item.src}" type="video/mp4" />
         </video>
         <div class="meta">
@@ -228,13 +228,20 @@
       entries.forEach(entry => {
         const vid = entry.target.querySelector('video');
         if(entry.isIntersecting && entry.intersectionRatio > 0.7){
-          vid.play().catch(()=>{});
+          const p = vid.play();
+          if(p && p.catch){ p.catch(()=>{}); }
         } else {
           vid.pause();
         }
       });
-    }, { threshold: [0, 0.4, 0.7, 1] });
+    }, { root: document.getElementById('feed'), threshold: [0, 0.4, 0.7, 1] });
     cards.forEach(c => io.observe(c));
+
+    // Tap to play or pause on mobile fallback
+    cards.forEach(c => {
+      const v = c.querySelector('video');
+      v.addEventListener('click', () => { if(v.paused) v.play().catch(()=>{}); else v.pause(); });
+    });
 
     // Follow button, client side only
     document.getElementById('followBtn').addEventListener('click', function(){
@@ -322,4 +329,5 @@
   </script>
 </body>
 </html>
+
 
