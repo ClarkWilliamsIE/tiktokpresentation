@@ -18,8 +18,8 @@
     .follow { margin-left: auto; background: #fe2c55; border: none; color: #fff; padding: 8px 12px; border-radius: 999px; font-weight: 600; cursor: pointer; }
 
     /* Feed */
-    main { max-width: 520px; margin: 0 auto; }
-    .card { position: relative; height: 88vh; margin: 14px auto; border-radius: 12px; overflow: hidden; background: #000; border: 1px solid #222; }
+    main { max-width: 520px; margin: 0 auto; height: calc(100svh - 56px); overflow-y: auto; scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+    .card { position: relative; height: 100%; margin: 0; border-radius: 12px; overflow: hidden; background: #000; border: 1px solid #222; scroll-snap-align: start; }
     video { width: 100%; height: 100%; object-fit: cover; }
 
     /* Overlay text area */
@@ -55,8 +55,7 @@
     .badge code { color: #e8e8e8; }
 
     /* Small screens */
-    @media (max-width: 540px) {
-      .card { height: 86vh; }
+    @media (max-width: 540px) { .card { height: 100%; } }
     }
   </style>
 </head>
@@ -256,6 +255,71 @@
       const h = Math.floor(m/60); if(h < 24) return `${h}h ago`;
       const d = Math.floor(h/24); return `${d}d ago`;
     }
+    // ----- Swipe and paging behavior -----
+    const container = document.getElementById('feed');
+    let isPaging = false;
+    const pageCooldown = 600; // milliseconds between pages
+
+    function cardsInView(){
+      return Array.from(document.querySelectorAll('.card'));
+    }
+    function currentIndex(){
+      const cs = cardsInView();
+      // pick the card whose center is closest to the viewport center
+      const center = container.scrollTop + container.clientHeight / 2;
+      let best = 0, bestDist = Infinity;
+      cs.forEach((c, i) => {
+        const rectTop = c.offsetTop;
+        const rectCenter = rectTop + c.offsetHeight / 2;
+        const d = Math.abs(rectCenter - center);
+        if(d < bestDist){ bestDist = d; best = i; }
+      });
+      return best;
+    }
+    function snapTo(i){
+      const cs = cardsInView();
+      if(i < 0 || i >= cs.length) return;
+      isPaging = true;
+      cs[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => { isPaging = false; }, pageCooldown);
+    }
+
+    // Wheel paging, ignores tiny trackpad jitters
+    let wheelAccum = 0;
+    container.addEventListener('wheel', e => {
+      if(isPaging) return;
+      wheelAccum += e.deltaY;
+      const threshold = 60; // adjust sensitivity
+      if(wheelAccum > threshold){ snapTo(currentIndex()+1); wheelAccum = 0; }
+      if(wheelAccum < -threshold){ snapTo(currentIndex()-1); wheelAccum = 0; }
+    }, { passive: true });
+
+    // Touch swipe paging
+    let touchStartY = 0, touchStartTime = 0;
+    container.addEventListener('touchstart', e => {
+      if(e.touches.length !== 1) return;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    }, { passive: true });
+    container.addEventListener('touchend', e => {
+      const dy = (e.changedTouches?.[0]?.clientY || 0) - touchStartY;
+      const dt = Date.now() - touchStartTime;
+      const fast = dt < 450; // quick flick
+      const threshold = 50;
+      if(isPaging) return;
+      if(dy < -threshold && fast){ snapTo(currentIndex()+1); }
+      if(dy > threshold && fast){ snapTo(currentIndex()-1); }
+    });
+
+    // Keyboard support
+    container.addEventListener('keydown', e => {
+      if(['ArrowDown','PageDown',' '].includes(e.key)){ e.preventDefault(); snapTo(currentIndex()+1); }
+      if(['ArrowUp','PageUp'].includes(e.key)){ e.preventDefault(); snapTo(currentIndex()-1); }
+    });
+
+    // Start at the first card
+    snapTo(0);
   </script>
 </body>
 </html>
+
