@@ -54,9 +54,15 @@
     .badge { position: fixed; right: 10px; top: 60px; z-index: 60; background: #111; border: 1px solid #222; padding: 8px 10px; border-radius: 8px; font-size: 12px; color: #bbb; max-width: 220px; }
     .badge code { color: #e8e8e8; }
 
-    /* Small screens */
-    @media (max-width: 540px) { .card { height: 100%; } }
+    /* Tap for sound badge */
+    .sound-badge { position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%); z-index: 70; background: rgba(0,0,0,0.75); border: 1px solid #333; padding: 10px 16px; border-radius: 999px; font-size: 14px; color: #fff; animation: pulse 1.6s infinite; }
+    @keyframes pulse {
+      0% { opacity: 0.6; }
+      50% { opacity: 1; }
+      100% { opacity: 0.6; }
     }
+
+    @media (max-width: 540px) { .card { height: 100%; } }
   </style>
 </head>
 <body>
@@ -71,9 +77,11 @@
 
   <main id="feed"></main>
 
+  <!-- Tap for sound badge -->
+  <div class="sound-badge" id="soundBadge">🔊 Tap for sound</div>
 
   <script>
-    // ------ Data for 20 clips, replace the src values with your files ------
+    // ------ Data for 20 clips ------
     const VIDEO_DATA = [
       { id: 'v01', src: 'videos/clip01.mp4', caption: 'PK 1 of 20, origin story', tags: ['#pechakucha','#story'] },
       { id: 'v02', src: 'videos/clip02.mp4', caption: 'PK 2 of 20, the spark', tags: ['#idea','#design'] },
@@ -98,21 +106,11 @@
     ];
 
     // ------ Helpers for localStorage state ------
-    function getLikeCount(id){
-      return Number(localStorage.getItem('like_'+id) || '0');
-    }
-    function setLikeCount(id,val){
-      localStorage.setItem('like_'+id,String(val));
-    }
-    function getLiked(id){
-      return localStorage.getItem('liked_'+id) === '1';
-    }
-    function setLiked(id,val){
-      localStorage.setItem('liked_'+id, val ? '1' : '0');
-    }
-    function getComments(id){
-      try { return JSON.parse(localStorage.getItem('comments_'+id) || '[]'); } catch(e){ return []; }
-    }
+    function getLikeCount(id){ return Number(localStorage.getItem('like_'+id) || '0'); }
+    function setLikeCount(id,val){ localStorage.setItem('like_'+id,String(val)); }
+    function getLiked(id){ return localStorage.getItem('liked_'+id) === '1'; }
+    function setLiked(id,val){ localStorage.setItem('liked_'+id, val ? '1' : '0'); }
+    function getComments(id){ try { return JSON.parse(localStorage.getItem('comments_'+id) || '[]'); } catch(e){ return []; } }
     function pushComment(id,name,text){
       const c = getComments(id);
       c.push({ name, text, time: new Date().toISOString() });
@@ -156,7 +154,7 @@
       `;
       feed.appendChild(card);
 
-      // Set initial like state
+      // Likes setup
       const likeBtn = card.querySelector('.likeBtn');
       const likeIcon = card.querySelector('.heart');
       const likeCount = card.querySelector('.likeCount');
@@ -168,25 +166,19 @@
       likeBtn.addEventListener('click', () => {
         const wasLiked = getLiked(item.id);
         const current = getLikeCount(item.id);
-        if(wasLiked){
-          setLiked(item.id,false);
-          setLikeCount(item.id, Math.max(0,current-1));
-        } else {
-          setLiked(item.id,true);
-          setLikeCount(item.id, current+1);
-        }
+        if(wasLiked){ setLiked(item.id,false); setLikeCount(item.id, Math.max(0,current-1)); }
+        else { setLiked(item.id,true); setLikeCount(item.id, current+1); }
         likeCount.textContent = String(getLikeCount(item.id));
         likeIcon.classList.toggle('liked');
         likeBtn.setAttribute('aria-pressed', getLiked(item.id) ? 'true' : 'false');
       });
 
-      // Comments
+      // Comments setup
       const panel = card.querySelector('.comments');
       const openBtn = card.querySelector('.openComments');
       const list = card.querySelector('.list');
       const cCount = card.querySelector('.cCount');
       const form = card.querySelector('.cform');
-
       function renderComments(){
         const cs = getComments(item.id);
         cCount.textContent = String(cs.length);
@@ -199,7 +191,6 @@
         });
       }
       renderComments();
-
       openBtn.addEventListener('click', () => {
         const anyOpen = document.querySelector('.comments.visible');
         if(anyOpen && anyOpen !== panel){ anyOpen.classList.remove('visible'); }
@@ -214,33 +205,29 @@
         pushComment(item.id, name, text);
         form.reset();
         renderComments();
-        // Focus the text box for fast posting
         form.querySelector('input[name="text"]').focus();
       });
     });
 
-    // Autoplay the clip in view, pause others
+    // Autoplay handling
     const cards = Array.from(document.querySelectorAll('.card'));
     const io = new IntersectionObserver(entries => {
       entries.forEach(entry => {
         const vid = entry.target.querySelector('video');
         if(entry.isIntersecting && entry.intersectionRatio > 0.7){
-          const p = vid.play();
-          if(p && p.catch){ p.catch(()=>{}); }
-        } else {
-          vid.pause();
-        }
+          const p = vid.play(); if(p && p.catch){ p.catch(()=>{}); }
+        } else { vid.pause(); }
       });
     }, { root: document.getElementById('feed'), threshold: [0, 0.4, 0.7, 1] });
     cards.forEach(c => io.observe(c));
 
-    // Tap to play or pause on mobile fallback
+    // Tap to play/pause
     cards.forEach(c => {
       const v = c.querySelector('video');
       v.addEventListener('click', () => { if(v.paused) v.play().catch(()=>{}); else v.pause(); });
     });
 
-    // Follow button, client side only
+    // Follow button
     document.getElementById('followBtn').addEventListener('click', function(){
       const pressed = this.getAttribute('aria-pressed') === 'true';
       this.setAttribute('aria-pressed', pressed ? 'false' : 'true');
@@ -248,10 +235,8 @@
       this.style.background = pressed ? '#fe2c55' : '#333';
     });
 
-    // Small helpers
-    function escapeHtml(str){
-      return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[s]));
-    }
+    // Helpers
+    function escapeHtml(str){ return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[s])); }
     function timeAgo(iso){
       const sec = Math.floor((Date.now() - new Date(iso).getTime())/1000);
       if(sec < 60) return `${sec}s ago`;
@@ -259,17 +244,14 @@
       const h = Math.floor(m/60); if(h < 24) return `${h}h ago`;
       const d = Math.floor(h/24); return `${d}d ago`;
     }
-    // ----- Swipe and paging behavior -----
+
+    // Paging behavior
     const container = document.getElementById('feed');
     let isPaging = false;
-    const pageCooldown = 600; // milliseconds between pages
-
-    function cardsInView(){
-      return Array.from(document.querySelectorAll('.card'));
-    }
+    const pageCooldown = 600;
+    function cardsInView(){ return Array.from(document.querySelectorAll('.card')); }
     function currentIndex(){
       const cs = cardsInView();
-      // pick the card whose center is closest to the viewport center
       const center = container.scrollTop + container.clientHeight / 2;
       let best = 0, bestDist = Infinity;
       cs.forEach((c, i) => {
@@ -287,18 +269,14 @@
       cs[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
       setTimeout(() => { isPaging = false; }, pageCooldown);
     }
-
-    // Wheel paging, ignores tiny trackpad jitters
     let wheelAccum = 0;
     container.addEventListener('wheel', e => {
       if(isPaging) return;
       wheelAccum += e.deltaY;
-      const threshold = 60; // adjust sensitivity
+      const threshold = 60;
       if(wheelAccum > threshold){ snapTo(currentIndex()+1); wheelAccum = 0; }
       if(wheelAccum < -threshold){ snapTo(currentIndex()-1); wheelAccum = 0; }
     }, { passive: true });
-
-    // Touch swipe paging
     let touchStartY = 0, touchStartTime = 0;
     container.addEventListener('touchstart', e => {
       if(e.touches.length !== 1) return;
@@ -308,21 +286,33 @@
     container.addEventListener('touchend', e => {
       const dy = (e.changedTouches?.[0]?.clientY || 0) - touchStartY;
       const dt = Date.now() - touchStartTime;
-      const fast = dt < 450; // quick flick
+      const fast = dt < 450;
       const threshold = 50;
       if(isPaging) return;
       if(dy < -threshold && fast){ snapTo(currentIndex()+1); }
       if(dy > threshold && fast){ snapTo(currentIndex()-1); }
     });
-
-    // Keyboard support
     container.addEventListener('keydown', e => {
       if(['ArrowDown','PageDown',' '].includes(e.key)){ e.preventDefault(); snapTo(currentIndex()+1); }
       if(['ArrowUp','PageUp'].includes(e.key)){ e.preventDefault(); snapTo(currentIndex()-1); }
     });
-
-    // Start at the first card
     snapTo(0);
+
+    // ---- One-tap global unmute ----
+    let unmuted = false;
+    const soundBadge = document.getElementById('soundBadge');
+    function enableSound() {
+      if (unmuted) return;
+      unmuted = true;
+      document.querySelectorAll('video').forEach(v => {
+        v.muted = false;
+        v.play().catch(()=>{});
+      });
+      soundBadge.style.display = 'none';
+    }
+    document.body.addEventListener('click', enableSound, { once: true });
+    document.body.addEventListener('touchstart', enableSound, { once: true });
+    document.body.addEventListener('keydown', enableSound, { once: true });
   </script>
 </body>
 </html>
